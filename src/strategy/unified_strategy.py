@@ -201,7 +201,15 @@ class QuantSessionSweepStrategy(bt.Strategy):
         # ── Risk / execution ──
         ("daily_loss_limit_pct", -0.04),
         ("news_blackout_minutes", 30),
-        ("volume_threshold_multiplier", 1.0),  # lowered from 1.25 to let more trades through
+        ("volume_threshold_multiplier", 1.0),
+        # ── LONG Entry Refinements ──
+        ("enable_h1_momentum_filter", True),
+        ("enable_bb_entry_zone", True),
+        ("enable_volume_spike_confirm", True),
+        ("volume_spike_multiplier", 1.5),
+        ("bb_width_lookback", 5),
+        ("h1_rsi_period", 14),
+        ("h1_rsi_threshold", 50),
     )
 
     def __init__(self) -> None:
@@ -225,6 +233,14 @@ class QuantSessionSweepStrategy(bt.Strategy):
         self.ema_50_1h = bt.indicators.EMA(self.d1h.close, period=50)
         self.ema_200_1h = bt.indicators.EMA(self.d1h.close, period=200)
         self.ema_50_4h = bt.indicators.EMA(self.d4h.close, period=50)
+
+        # ── H1 Momentum indicators (LONG entry refinements) ──
+        self.ema_20_1h = bt.indicators.EMA(self.d1h.close, period=20)
+        self.rsi_1h = bt.indicators.RSI(self.d1h.close, period=self.p.h1_rsi_period)
+        self.macd_1h = bt.indicators.MACD(self.d1h.close, period_me1=12, period_me2=26, period_signal=9)
+
+        # ── BB Width tracking (stored as rolling list for expansion check) ──
+        self._bb_width_history = []
 
         # ── Modular engines ──
         self.tracker = SessionLiquidityTracker(
@@ -500,6 +516,123 @@ class QuantSessionSweepStrategy(bt.Strategy):
                 return False
 
         return True
+
+    # ═══════════════════════════════════════════════════════════════════════
+    #  CHECK: H1/H4 Momentum Filter (LONG only)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _h1_momentum_filter_ok(self) -> bool:
+        if not self.p.enable_h1_momentum_filter:
+            return True
+        if len(self.d1h) < 30:
+            return True
+        try:
+            macd_line = float(self.macd_1h.lines.macd[0])
+            rsi_val = float(self.rsi_1h[0])
+            ema20_cur = float(self.ema_20_1h[0])
+            ema20_prev = float(self.ema_20_1h[-1])
+        except (IndexError, TypeError):
+            return True
+
+        if math.isnan(macd_line) or math.isnan(rsi_val) or math.isnan(ema20_cur) or math.isnan(ema20_prev):
+            return True
+
+        macd_bullish = macd_line > 0
+        rsi_bullish = rsi_val > self.p.h1_rsi_threshold
+        ema20_rising = ema20_cur > ema20_prev
+
+        ok = macd_bullish or rsi_bullish or ema20_rising
+        if not ok:
+            self._log_rejection_once_per_hour(
+                "h1mom",
+                f"H1 momentum filter failed: MACD={macd_line:.4f} RSI={rsi_val:.1f} "
+                f"EMA20_rising={ema20_rising}"
+            )
+        return ok
+
+    # ═══════════════════════════════════════════════════════════════════════
+    #  CHECK: Bollinger Band Entry Zone (LONG only)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _bb_entry_zone_long_ok(self) -> bool:
+        if not self.p.enable_bb_entry_zone:
+            return True
+        if len(self.d5m) < 22:
+            return True
+        try:
+            bb_bot = float(self.bb_5m.lines.bot[0])
+            bb_mid = float(self.bb_5m.lines.mid[0])
+            bb_top = float(self.bb_5m.lines.top[0])
+            d5m_close = float(self.d5m.close[0])
+        except (IndexError, TypeError):
+            return True
+
+        if math.isnan(bb_bot) or math.isnan(bb_mid) or math.isnan(bb_top) or math.isnan(d5m_close):
+            return True
+        if bb_mid <= 0:
+            return True
+
+        current_width = (bb_top - bb_bot) / bb_mid
+
+        self._bb_width_history.append(current_width)
+        max_history = max(self.p.bb_width_lookback, 5)
+        if len(self._bb_width_history) > max_history:
+            self._bb_width_history = self._bb_width_history[-max_history:]
+
+        if len(self._bb_width_history) < 2:
+            return True
+
+        width_expanding = current_width > self._bb_width_history[-2]
+        if not width_expanding:
+            self._log_rejection_once_per_hour(
+                "bbwidth",
+                f"BB width not expanding: {current_width:.4f} <= {self._bb_width_history[-2]:.4f}"
+            )
+            return False
+
+        bb_range = bb_top - bb_bot
+        if bb_range <= 0:
+            return True
+        bb_score = (d5m_close - bb_bot) / bb_range
+        in_entry_zone = bb_score <= 0.25
+        if not in_entry_zone:
+            self._log_rejection_once_per_hour(
+                "bbzone",
+                f"Price not in lower BB entry zone: score={bb_score:.2f} (need <=0.25)"
+            )
+        return in_entry_zone
+
+    # ═══════════════════════════════════════════════════════════════════════
+    #  CHECK: Volume Spike Confirmation (LONG only)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _volume_spike_confirm_ok(self) -> bool:
+        if not self.p.enable_volume_spike_confirm:
+            return True
+        if len(self.d1m) < 7:
+            return True
+        try:
+            current_vol = float(self.d1m.volume[0])
+            prev_vols = [float(self.d1m.volume[-i]) for i in range(2, 7)]
+        except (IndexError, TypeError, ValueError):
+            return True
+
+        if math.isnan(current_vol) or any(math.isnan(v) for v in prev_vols):
+            return True
+        if current_vol <= 0:
+            return False
+
+        avg_prev = sum(prev_vols) / len(prev_vols) if prev_vols else 0
+        if avg_prev <= 0:
+            return True
+
+        spike_ok = current_vol >= avg_prev * self.p.volume_spike_multiplier
+        if not spike_ok:
+            self._log_rejection_once_per_hour(
+                "volspike",
+                f"Volume spike failed: cur={current_vol:.0f} < {self.p.volume_spike_multiplier}x avg_prev={avg_prev:.0f}"
+            )
+        return spike_ok
 
     # ═══════════════════════════════════════════════════════════════════════
     #  CHECK 1: Daily Loss Circuit Breaker
@@ -845,7 +978,13 @@ class QuantSessionSweepStrategy(bt.Strategy):
     def _run_pre_trade_checklist(self, ts: datetime) -> None:
         """
         Sequential checklist gating:
-          CB → Kill-zone → Cooldown → Trend → LossGuard → Sweep → HeavyVol → Execute
+
+          LONG:  CB → Kill-zone → Cooldown → LossGuard → Sweep →
+                 Trend → BB/EMA13 → H1Mom → BBEntryZone → VolSpike →
+                 Pattern → Execute
+
+          SHORT: CB → Kill-zone → Cooldown → LossGuard → Sweep →
+                 Trend → BB/EMA13 → Pattern → Execute
         """
         # ── Gate 1: Daily loss circuit breaker ──
         if not self._daily_circuit_breaker_ok(ts):
@@ -888,6 +1027,25 @@ class QuantSessionSweepStrategy(bt.Strategy):
             return
 
         if sweep_dir == 1:
+            # ── LONG Entry Refinements ──
+            if not self._h1_momentum_filter_ok():
+                self._log_rejection_once_per_hour(
+                    "h1mom", "Checklist: LONG rejected - H1 momentum filter."
+                )
+                return
+
+            if not self._bb_entry_zone_long_ok():
+                self._log_rejection_once_per_hour(
+                    "bbzone", "Checklist: LONG rejected - BB entry zone."
+                )
+                return
+
+            if not self._volume_spike_confirm_ok():
+                self._log_rejection_once_per_hour(
+                    "volspike", "Checklist: LONG rejected - volume spike confirmation."
+                )
+                return
+
             confirmed, patterns = self._confirm_pattern(sweep_dir, sweep.swept_level)
             if not confirmed:
                 self._log_rejection_once_per_hour(
@@ -1218,7 +1376,7 @@ def load_xauusd_dataframe(csv_path: str) -> pd.DataFrame:
 
 def run_backtest(
     csv_path: str = "xauusd_1m.csv",
-    initial_cash: float = 100_000.0,
+    initial_cash: float = 5_000.0,
     commission: float = 0.0002,
     slippage_fixed: float = 0.05,
     trade_start: Optional[str] = None,
@@ -1238,6 +1396,10 @@ def run_backtest(
     max_consecutive_losses: int = 2,
     partial_tp_enabled: bool = True,
     daily_loss_limit_pct: float = -0.04,
+    enable_h1_momentum_filter: bool = True,
+    enable_bb_entry_zone: bool = True,
+    enable_volume_spike_confirm: bool = True,
+    volume_spike_multiplier: float = 1.5,
     log_level: str = "INFO",
 ) -> Dict[str, Any]:
     """
@@ -1308,6 +1470,10 @@ def run_backtest(
         max_consecutive_losses=max_consecutive_losses,
         partial_tp_enabled=partial_tp_enabled,
         daily_loss_limit_pct=daily_loss_limit_pct,
+        enable_h1_momentum_filter=enable_h1_momentum_filter,
+        enable_bb_entry_zone=enable_bb_entry_zone,
+        enable_volume_spike_confirm=enable_volume_spike_confirm,
+        volume_spike_multiplier=volume_spike_multiplier,
         trade_start=ts_start,
         trade_end=ts_end,
     )
@@ -1375,7 +1541,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="XAUUSD Quant Session-Sweep Unified Backtest")
     parser.add_argument("--csv", default="xauusd_1m.csv", help="Path to 1M OHLCV CSV")
     parser.add_argument("--config", default="configs/config_30d.yaml", help="YAML config file")
-    parser.add_argument("--cash", type=float, default=100_000.0, help="Initial cash")
+    parser.add_argument("--cash", type=float, default=5_000.0, help="Initial cash")
     parser.add_argument("--commission", type=float, default=0.0002)
     parser.add_argument("--slippage", type=float, default=0.05)
     parser.add_argument("--trade-start", default=None, help="Trade window start (YYYY-MM-DD)")
@@ -1411,7 +1577,7 @@ if __name__ == "__main__":
         # Use config values unless overridden by explicit CLI args
         run_backtest(
             csv_path=args.csv or data_cfg.get("file_path", "xauusd_1m.csv"),
-            initial_cash=args.cash if args.cash != 100_000.0 else exec_cfg.get("initial_cash", 100_000.0),
+            initial_cash=args.cash if args.cash != 5_000.0 else exec_cfg.get("initial_cash", 5_000.0),
             commission=args.commission if args.commission != 0.0002 else exec_cfg.get("commission", 0.0002),
             slippage_fixed=args.slippage if args.slippage != 0.05 else exec_cfg.get("slippage_fixed", 0.05),
             trade_start=args.trade_start or data_cfg.get("trade_start"),

@@ -151,6 +151,14 @@ def _print_config_overrides(args: argparse.Namespace, cfg: AppConfig) -> None:
         overrides.append(f"rr_ratio={args.rr_ratio}")
     if args.dry_run:
         overrides.append("mode=DRY_RUN")
+    if args.no_h1_momentum_filter:
+        overrides.append("h1_momentum_filter=OFF")
+    if args.no_bb_entry_zone:
+        overrides.append("bb_entry_zone=OFF")
+    if args.no_volume_spike_confirm:
+        overrides.append("volume_spike_confirm=OFF")
+    if args.volume_spike_multiplier != 1.5:
+        overrides.append(f"volume_spike_multiplier={args.volume_spike_multiplier}")
 
     if overrides:
         print(f"  CONFIG OVERRIDES:  {', '.join(overrides)}")
@@ -312,6 +320,10 @@ def _build_cerebro(
                                 else getattr(cfg.strategy, 'max_consecutive_losses', 1)),
         daily_loss_limit_pct=(args.daily_loss_limit_pct if args.daily_loss_limit_pct != -0.04
                               else cfg.risk.daily_loss_limit_pct),
+        enable_h1_momentum_filter=not args.no_h1_momentum_filter,
+        enable_bb_entry_zone=not args.no_bb_entry_zone,
+        enable_volume_spike_confirm=not args.no_volume_spike_confirm,
+        volume_spike_multiplier=args.volume_spike_multiplier,
         trade_start=trade_start,
         trade_end=trade_end,
     )
@@ -481,6 +493,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--no-trend-filter", action="store_true")
     parser.add_argument("--max-consecutive-losses", type=int, default=1)
     parser.add_argument("--daily-loss-limit-pct", type=float, default=-0.04)
+    parser.add_argument("--no-h1-momentum-filter", action="store_true")
+    parser.add_argument("--no-bb-entry-zone", action="store_true")
+    parser.add_argument("--no-volume-spike-confirm", action="store_true")
+    parser.add_argument("--volume-spike-multiplier", type=float, default=1.5)
 
     args = parser.parse_args(argv)
 

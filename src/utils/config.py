@@ -74,7 +74,7 @@ class DataConfig(BaseModel):
 
 class ExecutionConfig(BaseModel):
     commission: float = 0.0002
-    initial_cash: float = 100_000.0
+    initial_cash: float = 5_000.0
     slippage_fixed: float = 0.05
     spread_buffer: float = 0.1
 
@@ -197,7 +197,7 @@ def load_config(path: str = "configs/config_30d.yaml") -> AppConfig:
     exec_raw = raw.get("execution", {})
     exec_cfg = ExecutionConfig(
         commission=float(exec_raw.get("commission", 0.0002)),
-        initial_cash=float(exec_raw.get("initial_cash", 100_000.0)),
+        initial_cash=float(exec_raw.get("initial_cash", 5_000.0)),
         slippage_fixed=float(exec_raw.get("slippage_fixed", 0.05)),
         spread_buffer=float(exec_raw.get("spread_buffer", 0.1)),
     )

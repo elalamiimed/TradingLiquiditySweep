@@ -6,7 +6,7 @@ data:
 
 execution:
   commission: 0.00005
-  initial_cash: 50000.0
+  initial_cash: 5000.0
   slippage_fixed: 0.05
   spread_buffer: 0.1
 
