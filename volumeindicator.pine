@@ -1,0 +1,35 @@
+//@version=5
+indicator("Volume Candle Pro", shorttitle="VolCandlePro", overlay=true)
+
+// Inputs
+period = input.int(20, "Volume EMA Period", minval=1)
+factor = input.float(1.25, "Volume Threshold Multiplier", minval=1.0, step=0.05)
+showLabels = input.bool(true, "Show Volume Labels")
+
+// Calculations
+volEma = ta.ema(volume, period)
+volThreshold = volEma * factor
+isHeavyVol = volume > volThreshold
+isBullish = close > open
+isBearish = open > close
+
+// Color assignment
+candleColor = isHeavyVol and isBullish ? color.lime :
+              isHeavyVol and isBearish ? color.red :
+              isBullish ? color.silver : color.gray
+
+// Plot
+barcolor(candleColor, title="Volume-Based Candle Color")
+
+// Optional: Show volume value labels on heavy candles
+if showLabels and isHeavyVol
+    label.new(bar_index, high, 
+         str.tostring(volume, "#,###"), 
+         style=label.style_label_down, 
+         color=isBullish ? color.green : color.red,
+         textcolor=color.white,
+         size=size.tiny)
+
+// Alert conditions (optional)
+alertcondition(isHeavyVol and isBullish, "Heavy Bullish Volume", "High volume bullish candle detected")
+alertcondition(isHeavyVol and isBearish, "Heavy Bearish Volume", "High volume bearish candle detected")

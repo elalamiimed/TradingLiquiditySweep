@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Test</title>
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<style>
+body { margin:0; padding:0; background:#0d1117; color:#fff; }
+#status { padding:20px; }
+#chart { width:100%; height:400px; }
+</style>
+</head>
+<body>
+<div id="status">Checking Plotly...</div>
+<div id="chart"></div>
+<script>
+(function(){
+  var s = document.getElementById('status');
+  if (typeof Plotly === 'undefined') {
+    s.innerHTML = 'ERROR: Plotly not loaded';
+    return;
+  }
+  s.innerHTML = 'Plotly OK';
+  try {
+    Plotly.newPlot('chart', [{type:'candlestick',
+      x:['10:00','10:01','10:02','10:03'],
+      open:[100,101,99,102],
+      high:[103,104,102,105],
+      low:[98,99,97,100],
+      close:[101,99,102,103]}],
+      {template:'plotly_dark',paper_bgcolor:'#0d1117',plot_bgcolor:'#0d1117',
+       margin:{l:60,r:20,t:20,b:40},
+       xaxis:{type:'category'},
+       yaxis:{title:'Price'}},
+      {responsive:true});
+    s.innerHTML += ' - Rendered OK!';
+  } catch(e) {
+    s.innerHTML += ' - Error: '+e.message;
+  }
+})();
+</script>
+</body>
+</html>

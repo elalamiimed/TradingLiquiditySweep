@@ -1,0 +1,12 @@
+HistData.com (c) 2012
+File: DAT_ASCII_XAUUSD_M1_202604.csv Status Report
+
+Gap of 3625s found between 20260401165958 and 20260401180029.
+Gap of 179s found between 20260401180035 and 20260401180340.
+Gap of 3595s found between 20260406165958 and 20260406180000.
+Gap of 3596s found between 20260407165958 and 20260407180001.
+Gap of 3595s found between 20260408165959 and 20260408180001.
+Gap of 3596s found between 20260409165958 and 20260409180001.
+
+Average tick interval: 5791 miliseconds.
+Maximum tick interval found: 3625018 miliseconds.

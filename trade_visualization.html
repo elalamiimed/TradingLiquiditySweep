@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XAUUSD Session-Sweep Backtest — Trade Visualization</title>
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0d1117; color: #c9d1d9; font-family: 'Segoe UI', system-ui, sans-serif; }
+  .header { background: #161b22; padding: 16px 24px; border-bottom: 1px solid #30363d; }
+  .header h1 { font-size: 20px; color: #58a6ff; }
+  .header .sub { font-size: 12px; color: #8b949e; margin-top: 4px; }
+  .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; padding: 12px 16px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px; }
+  .card h3 { font-size: 14px; color: #8b949e; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat { padding: 8px 10px; background: #0d1117; border-radius: 6px; }
+  .stat .label { font-size: 11px; color: #8b949e; }
+  .stat .value { font-size: 18px; font-weight: 700; }
+  .stat .value.green { color: #3fb950; }
+  .stat .value.red { color: #f85149; }
+  .stat .value.blue { color: #58a6ff; }
+  .stat .subvalue { font-size: 11px; color: #8b949e; }
+  .full-width { grid-column: 1 / -1; }
+  #chart-price, #chart-pnl { width: 100%; }
+  .legend { display: flex; gap: 16px; margin-top: 8px; font-size: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .trade-list { max-height: 500px; overflow-y: auto; }
+  .trade-row { display: flex; justify-content: space-between; padding: 6px 10px; border-bottom: 1px solid #21262d; font-size: 12px; }
+  .trade-row.win { border-left: 3px solid #3fb950; }
+  .trade-row.loss { border-left: 3px solid #f85149; }
+  .trade-row .dir { font-weight: 600; width: 40px; }
+  .trade-row .dir.long { color: #3fb950; }
+  .trade-row .dir.short { color: #f85149; }
+  .trade-row .pnl { font-weight: 600; width: 70px; text-align: right; }
+  .filter-bar { display: flex; gap: 8px; margin-bottom: 10px; }
+  .filter-bar button { padding: 4px 12px; border: 1px solid #30363d; border-radius: 4px; background: #21262d; color: #c9d1d9; cursor: pointer; font-size: 12px; }
+  .filter-bar button.active { background: #1f6feb; border-color: #1f6feb; }
+  .rejection-stats { display: flex; flex-wrap: wrap; gap: 8px; }
+  .rej-chip { padding: 4px 10px; background: #21262d; border-radius: 12px; font-size: 11px; }
+  .rej-chip .count { font-weight: 700; color: #f85149; }
+  .section-title { font-size: 13px; font-weight: 600; color: #58a6ff; margin: 12px 0 8px 0; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>XAUUSD Session-Sweep Backtest — Trade Visualization</h1>
+  <div class="sub">
+    Window: 2026-04-26 00:30:53 — 2026-04-26 00:32:07 | 
+    Trades: 31 | 
+    Win Rate: 19.4% | 
+    P&L: $-1317.07
+  </div>
+</div>
+
+<div class="grid">
+  <!-- Stats Cards -->
+  <div class="card">
+    <h3>Performance Summary</h3>
+    <div class="stats-grid">
+      <div class="stat">
+        <div class="label">Starting Balance</div>
+        <div class="value blue">$5,000</div>
+      </div>
+      <div class="stat">
+        <div class="label">Final Balance</div>
+        <div class="value red">$3,682.93</div>
+        <div class="subvalue">-26.34%</div>
+      </div>
+      <div class="stat">
+        <div class="label">Win Rate</div>
+        <div class="value blue">19.4%</div>
+        <div class="subvalue">6W / 25L</div>
+      </div>
+      <div class="stat">
+        <div class="label">Profit Factor</div>
+        <div class="value red">0.4</div>
+      </div>
+      <div class="stat">
+        <div class="label">Avg Win</div>
+        <div class="value green">+$148.43</div>
+      </div>
+      <div class="stat">
+        <div class="label">Avg Loss</div>
+        <div class="value red">-$88.31</div>
+      </div>
+    </div>
+    <div class="section-title">Signal Activity</div>
+    <div class="rejection-stats">
+      <div class="rej-chip">🐂 Bullish sweeps: <span class="count" style="color:#3fb950">56</span></div>
+      <div class="rej-chip">🐻 Bearish sweeps: <span class="count" style="color:#f85149">31</span></div>
+      <div class="rej-chip">⏰ Kill-zone rejects: <span class="count">1165</span></div>
+      <div class="rej-chip">🔍 No sweep: <span class="count">224</span></div>
+      <div class="rej-chip">📊 Vol filter rejects: <span class="count">55</span></div>
+    </div>
+    <div class="section-title">Settings</div>
+    <div style="font-size:11px;color:#8b949e;line-height:1.6">
+      Kill-zone: 12:00–16:00 UTC (NY AM only)<br>
+      Confirmation: Heavy-volume candle (EMA20 vol × 1.25)<br>
+      Risk: 2% per trade | ATR-based stops | 1:2 RR<br>
+      Session: Asia → London ref | NY → London ref (Asia fallback)<br>
+    </div>
+  </div>
+
+  <!-- PnL Chart -->
+  <div class="card">
+    <h3>Equity Curve</h3>
+    <div id="chart-pnl" style="height: 260px;"></div>
+  </div>
+
+  <!-- Price Chart -->
+  <div class="card full-width">
+    <h3>Price Chart with Trade Overlays</h3>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#3fb950"></div> Win</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div> Loss</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div> Entry</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#d2a800"></div> Exit</div>
+      </div>
+      <div style="flex:1"></div>
+      <div class="filter-bar">
+        <button onclick="filterTrades('all')" class="active" id="btn-all">All</button>
+        <button onclick="filterTrades('win')" id="btn-win">Wins</button>
+        <button onclick="filterTrades('loss')" id="btn-loss">Losses</button>
+        <button onclick="filterTrades('long')" id="btn-long">LONG</button>
+        <button onclick="filterTrades('short')" id="btn-short">SHORT</button>
+      </div>
+    </div>
+    <div id="chart-price" style="height: 520px;"></div>
+  </div>
+
+  <!-- Trade List -->
+  <div class="card full-width">
+    <h3>Trade Log</h3>
+    <div class="trade-list" id="trade-list">
+
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#1</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;width:50px">23b</span>
+        <span class="pnl" style="color:#f85149">$-103.23</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#2</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;width:50px">253b</span>
+        <span class="pnl" style="color:#f85149">$-102.98</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#3</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;width:50px">150b</span>
+        <span class="pnl" style="color:#f85149">$-103.86</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#4</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;width:50px">76b</span>
+        <span class="pnl" style="color:#f85149">$-99.82</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#5</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;width:50px">40b</span>
+        <span class="pnl" style="color:#f85149">$-92.95</span>
+      </div>
+      <div class="trade-row win" data-result="win" data-dir="short">
+        <span style="color:#8b949e;width:24px">#6</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;width:50px">132b</span>
+        <span class="pnl" style="color:#3fb950">$+166.46</span>
+      </div>
+      <div class="trade-row win" data-result="win" data-dir="short">
+        <span style="color:#8b949e;width:24px">#7</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;width:50px">84b</span>
+        <span class="pnl" style="color:#3fb950">$+169.70</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#8</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;width:50px">278b</span>
+        <span class="pnl" style="color:#f85149">$-100.50</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#9</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;width:50px">104b</span>
+        <span class="pnl" style="color:#f85149">$-95.91</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#10</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;width:50px">124b</span>
+        <span class="pnl" style="color:#f85149">$-177.39</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#11</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;width:50px">59b</span>
+        <span class="pnl" style="color:#f85149">$-79.59</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#12</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:30</span>
+        <span style="color:#8b949e;width:50px">72b</span>
+        <span class="pnl" style="color:#f85149">$-79.92</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#13</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;width:50px">9b</span>
+        <span class="pnl" style="color:#f85149">$-70.74</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#14</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;width:50px">3b</span>
+        <span class="pnl" style="color:#f85149">$-55.24</span>
+      </div>
+      <div class="trade-row win" data-result="win" data-dir="short">
+        <span style="color:#8b949e;width:24px">#15</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;width:50px">17b</span>
+        <span class="pnl" style="color:#3fb950">$+160.51</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#16</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;width:50px">268b</span>
+        <span class="pnl" style="color:#f85149">$-85.30</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#17</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;width:50px">6b</span>
+        <span class="pnl" style="color:#f85149">$-88.11</span>
+      </div>
+      <div class="trade-row win" data-result="win" data-dir="short">
+        <span style="color:#8b949e;width:24px">#18</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;width:50px">51b</span>
+        <span class="pnl" style="color:#3fb950">$+152.82</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#19</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;width:50px">168b</span>
+        <span class="pnl" style="color:#f85149">$-82.85</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#20</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;width:50px">188b</span>
+        <span class="pnl" style="color:#f85149">$-76.32</span>
+      </div>
+      <div class="trade-row win" data-result="win" data-dir="short">
+        <span style="color:#8b949e;width:24px">#21</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;width:50px">111b</span>
+        <span class="pnl" style="color:#3fb950">$+144.42</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#22</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;width:50px">57b</span>
+        <span class="pnl" style="color:#f85149">$-84.10</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#23</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;width:50px">4b</span>
+        <span class="pnl" style="color:#f85149">$-86.51</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#24</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;width:50px">28b</span>
+        <span class="pnl" style="color:#f85149">$-88.44</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#25</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;width:50px">73b</span>
+        <span class="pnl" style="color:#f85149">$-81.91</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#26</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;width:50px">154b</span>
+        <span class="pnl" style="color:#f85149">$-88.88</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#27</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;width:50px">15b</span>
+        <span class="pnl" style="color:#f85149">$-74.80</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#28</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;width:50px">11b</span>
+        <span class="pnl" style="color:#f85149">$-76.36</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#29</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:31</span>
+        <span style="color:#8b949e;width:50px">268b</span>
+        <span class="pnl" style="color:#f85149">$-67.88</span>
+      </div>
+      <div class="trade-row loss" data-result="loss" data-dir="short">
+        <span style="color:#8b949e;width:24px">#30</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:32</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:32</span>
+        <span style="color:#8b949e;width:50px">116b</span>
+        <span class="pnl" style="color:#f85149">$-64.06</span>
+      </div>
+      <div class="trade-row win" data-result="win" data-dir="short">
+        <span style="color:#8b949e;width:24px">#31</span>
+        <span class="dir short">SHORT</span>
+        <span style="flex:1">2026-04-26 00:32</span>
+        <span style="color:#8b949e;margin:0 8px">→</span>
+        <span style="flex:1">2026-04-26 00:32</span>
+        <span style="color:#8b949e;width:50px">21b</span>
+        <span class="pnl" style="color:#3fb950">$+96.67</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Data ──
+const candlestickData = [];
+const winTrades = [{"entry_ts": "2026-04-26 00:30:55", "exit_ts": "2026-04-26 00:30:55", "entry_px": 4638.62, "exit_px": 4623.03, "direction": "SHORT", "pnl": 166.46, "bars": 132, "sl": 4646.44, "tp": 4623.03, "result": "WIN"}, {"entry_ts": "2026-04-26 00:30:55", "exit_ts": "2026-04-26 00:30:55", "entry_px": 4676.76, "exit_px": 4669.76, "direction": "SHORT", "pnl": 169.7, "bars": 84, "sl": 4680.28, "tp": 4669.76, "result": "WIN"}, {"entry_ts": "2026-04-26 00:31:02", "exit_ts": "2026-04-26 00:31:02", "entry_px": 4942.66, "exit_px": 4888.66, "direction": "SHORT", "pnl": 160.51, "bars": 17, "sl": 4969.74, "tp": 4888.66, "result": "WIN"}, {"entry_ts": "2026-04-26 00:31:06", "exit_ts": "2026-04-26 00:31:06", "entry_px": 5076.65, "exit_px": 5060.86, "direction": "SHORT", "pnl": 152.82, "bars": 51, "sl": 5084.62, "tp": 5060.86, "result": "WIN"}, {"entry_ts": "2026-04-26 00:31:15", "exit_ts": "2026-04-26 00:31:15", "entry_px": 5214.93, "exit_px": 5196.36, "direction": "SHORT", "pnl": 144.42, "bars": 111, "sl": 5224.16, "tp": 5196.36, "result": "WIN"}, {"entry_ts": "2026-04-26 00:32:07", "exit_ts": "2026-04-26 00:32:07", "entry_px": 4456.38, "exit_px": 4407.6, "direction": "SHORT", "pnl": 96.67, "bars": 21, "sl": 4480.88, "tp": 4407.6, "result": "WIN"}];
+const lossTrades = [{"entry_ts": "2026-04-26 00:30:53", "exit_ts": "2026-04-26 00:30:53", "entry_px": 4437.68, "exit_px": 4447.55, "direction": "SHORT", "pnl": -103.23, "bars": 23, "sl": 4447.5, "tp": 4418.23, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:30:53", "exit_ts": "2026-04-26 00:30:54", "entry_px": 4440.81, "exit_px": 4449.73, "direction": "SHORT", "pnl": -102.98, "bars": 253, "sl": 4449.68, "tp": 4423.14, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:30:54", "exit_ts": "2026-04-26 00:30:54", "entry_px": 4487.34, "exit_px": 4493.81, "direction": "SHORT", "pnl": -103.86, "bars": 150, "sl": 4493.76, "tp": 4474.64, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:30:54", "exit_ts": "2026-04-26 00:30:54", "entry_px": 4594.51, "exit_px": 4601.18, "direction": "SHORT", "pnl": -99.82, "bars": 76, "sl": 4601.13, "tp": 4581.2, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:30:54", "exit_ts": "2026-04-26 00:30:54", "entry_px": 4588.0, "exit_px": 4597.87, "direction": "SHORT", "pnl": -92.95, "bars": 40, "sl": 4597.82, "tp": 4568.51, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:30:55", "exit_ts": "2026-04-26 00:30:55", "entry_px": 4760.11, "exit_px": 4768.01, "direction": "SHORT", "pnl": -100.5, "bars": 278, "sl": 4767.96, "tp": 4744.98, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:30:56", "exit_ts": "2026-04-26 00:30:56", "entry_px": 4975.24, "exit_px": 4985.4, "direction": "SHORT", "pnl": -95.91, "bars": 104, "sl": 4985.35, "tp": 4954.94, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:30:56", "exit_ts": "2026-04-26 00:30:56", "entry_px": 4986.1, "exit_px": 5003.34, "direction": "SHORT", "pnl": -177.39, "bars": 124, "sl": 4995.13, "tp": 4968.26, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:30:59", "exit_ts": "2026-04-26 00:30:59", "entry_px": 5291.82, "exit_px": 5307.21, "direction": "SHORT", "pnl": -79.59, "bars": 59, "sl": 5307.16, "tp": 5261.14, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:30:59", "exit_ts": "2026-04-26 00:30:59", "entry_px": 5290.44, "exit_px": 5309.89, "direction": "SHORT", "pnl": -79.92, "bars": 72, "sl": 5309.84, "tp": 5252.07, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:31:02", "exit_ts": "2026-04-26 00:31:02", "entry_px": 4941.54, "exit_px": 4964.62, "direction": "SHORT", "pnl": -70.74, "bars": 9, "sl": 4964.57, "tp": 4894.2, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:31:02", "exit_ts": "2026-04-26 00:31:02", "entry_px": 4909.65, "exit_px": 4936.78, "direction": "SHORT", "pnl": -55.24, "bars": 3, "sl": 4936.73, "tp": 4851.84, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:31:05", "exit_ts": "2026-04-26 00:31:05", "entry_px": 4963.59, "exit_px": 4980.15, "direction": "SHORT", "pnl": -85.3, "bars": 268, "sl": 4979.74, "tp": 4931.36, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:31:05", "exit_ts": "2026-04-26 00:31:05", "entry_px": 5042.72, "exit_px": 5054.8, "direction": "SHORT", "pnl": -88.11, "bars": 6, "sl": 5054.75, "tp": 5018.95, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:31:09", "exit_ts": "2026-04-26 00:31:09", "entry_px": 5038.52, "exit_px": 5049.86, "direction": "SHORT", "pnl": -82.85, "bars": 168, "sl": 5049.81, "tp": 5015.96, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:31:13", "exit_ts": "2026-04-26 00:31:13", "entry_px": 5067.51, "exit_px": 5082.27, "direction": "SHORT", "pnl": -76.32, "bars": 188, "sl": 5082.22, "tp": 5038.16, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:31:16", "exit_ts": "2026-04-26 00:31:16", "entry_px": 5191.73, "exit_px": 5200.56, "direction": "SHORT", "pnl": -84.1, "bars": 57, "sl": 5200.51, "tp": 5174.42, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:31:16", "exit_ts": "2026-04-26 00:31:16", "entry_px": 5191.2, "exit_px": 5199.34, "direction": "SHORT", "pnl": -86.51, "bars": 4, "sl": 5199.29, "tp": 5175.13, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:31:20", "exit_ts": "2026-04-26 00:31:20", "entry_px": 5257.06, "exit_px": 5264.57, "direction": "SHORT", "pnl": -88.44, "bars": 28, "sl": 5264.52, "tp": 5242.75, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:31:45", "exit_ts": "2026-04-26 00:31:45", "entry_px": 5138.64, "exit_px": 5154.5, "direction": "SHORT", "pnl": -81.91, "bars": 73, "sl": 5154.45, "tp": 5107.18, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:31:45", "exit_ts": "2026-04-26 00:31:46", "entry_px": 5166.8, "exit_px": 5178.99, "direction": "SHORT", "pnl": -88.88, "bars": 154, "sl": 5177.46, "tp": 5145.02, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:31:49", "exit_ts": "2026-04-26 00:31:49", "entry_px": 5114.66, "exit_px": 5123.5, "direction": "SHORT", "pnl": -74.8, "bars": 15, "sl": 5123.45, "tp": 5097.34, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:31:53", "exit_ts": "2026-04-26 00:31:53", "entry_px": 5189.51, "exit_px": 5204.27, "direction": "SHORT", "pnl": -76.36, "bars": 11, "sl": 5204.22, "tp": 5159.3, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:31:53", "exit_ts": "2026-04-26 00:31:54", "entry_px": 5197.72, "exit_px": 5214.17, "direction": "SHORT", "pnl": -67.88, "bars": 268, "sl": 5214.12, "tp": 5164.99, "result": "LOSS"}, {"entry_ts": "2026-04-26 00:32:06", "exit_ts": "2026-04-26 00:32:06", "entry_px": 4652.36, "exit_px": 4673.25, "direction": "SHORT", "pnl": -64.06, "bars": 116, "sl": 4673.2, "tp": 4609.19, "result": "LOSS"}];
+const pnlCurve = [{"x": "2026-04-26 00:30:53", "y": -103.23, "trade_num": 1}, {"x": "2026-04-26 00:30:54", "y": -206.21, "trade_num": 2}, {"x": "2026-04-26 00:30:54", "y": -310.07, "trade_num": 3}, {"x": "2026-04-26 00:30:54", "y": -409.89, "trade_num": 4}, {"x": "2026-04-26 00:30:54", "y": -502.84, "trade_num": 5}, {"x": "2026-04-26 00:30:55", "y": -336.38, "trade_num": 6}, {"x": "2026-04-26 00:30:55", "y": -166.68, "trade_num": 7}, {"x": "2026-04-26 00:30:55", "y": -267.18, "trade_num": 8}, {"x": "2026-04-26 00:30:56", "y": -363.09, "trade_num": 9}, {"x": "2026-04-26 00:30:56", "y": -540.48, "trade_num": 10}, {"x": "2026-04-26 00:30:59", "y": -620.07, "trade_num": 11}, {"x": "2026-04-26 00:30:59", "y": -699.99, "trade_num": 12}, {"x": "2026-04-26 00:31:02", "y": -770.73, "trade_num": 13}, {"x": "2026-04-26 00:31:02", "y": -825.97, "trade_num": 14}, {"x": "2026-04-26 00:31:02", "y": -665.46, "trade_num": 15}, {"x": "2026-04-26 00:31:05", "y": -750.76, "trade_num": 16}, {"x": "2026-04-26 00:31:05", "y": -838.87, "trade_num": 17}, {"x": "2026-04-26 00:31:06", "y": -686.05, "trade_num": 18}, {"x": "2026-04-26 00:31:09", "y": -768.9, "trade_num": 19}, {"x": "2026-04-26 00:31:13", "y": -845.22, "trade_num": 20}, {"x": "2026-04-26 00:31:15", "y": -700.8, "trade_num": 21}, {"x": "2026-04-26 00:31:16", "y": -784.9, "trade_num": 22}, {"x": "2026-04-26 00:31:16", "y": -871.41, "trade_num": 23}, {"x": "2026-04-26 00:31:20", "y": -959.85, "trade_num": 24}, {"x": "2026-04-26 00:31:45", "y": -1041.76, "trade_num": 25}, {"x": "2026-04-26 00:31:46", "y": -1130.64, "trade_num": 26}, {"x": "2026-04-26 00:31:49", "y": -1205.44, "trade_num": 27}, {"x": "2026-04-26 00:31:53", "y": -1281.8, "trade_num": 28}, {"x": "2026-04-26 00:31:54", "y": -1349.68, "trade_num": 29}, {"x": "2026-04-26 00:32:06", "y": -1413.74, "trade_num": 30}, {"x": "2026-04-26 00:32:07", "y": -1317.07, "trade_num": 31}];
+
+// ── Price Chart ──
+function buildPriceChart(filter) {
+  const traces = [];
+
+  // Candlestick
+  traces.push({
+    type: 'candlestick',
+    x: candlestickData.map(d => d.x),
+    open: candlestickData.map(d => d.open),
+    high: candlestickData.map(d => d.high),
+    low: candlestickData.map(d => d.low),
+    close: candlestickData.map(d => d.close),
+    increasing: {line: {color: '#26a69a', width: 1}, fillcolor: '#26a69a40'},
+    decreasing: {line: {color: '#ef5350', width: 1}, fillcolor: '#ef535040'},
+    name: 'XAUUSD 1H',
+    showlegend: false,
+  });
+
+  // Function to add trade lines
+  function addTradeArrows(tradeList, color, show) {
+    const entries = {x: [], y: [], text: []};
+    const lines = [];
+    tradeList.forEach(t => {
+      const isWin = t.result === 'WIN';
+      const entryColor = color;
+      const exitColor = isWin ? '#3fb950' : '#f85149';
+
+      // Entry marker
+      entries.x.push(t.entry_ts);
+      entries.y.push(t.entry_px);
+      entries.text.push(`${t.direction} | Entry: ${t.entry_px} | ${t.result}`);
+
+      // Line from entry to exit
+      lines.push({
+        type: 'scatter',
+        x: [t.entry_ts, t.exit_ts],
+        y: [t.entry_px, t.exit_px],
+        mode: 'lines',
+        line: {color: exitColor, width: 2, dash: 'solid'},
+        showlegend: false,
+        hoverinfo: 'text',
+        hovertext: `${t.direction} | ${t.entry_px} → ${t.exit_px} | ${t.result} $${t.pnl}`,
+      });
+
+      // Exit marker
+      lines.push({
+        type: 'scatter',
+        x: [t.exit_ts],
+        y: [t.exit_px],
+        mode: 'markers',
+        marker: {color: exitColor, size: 8, symbol: 'x'},
+        showlegend: false,
+        hoverinfo: 'skip',
+      });
+    });
+
+    traces.push({
+      type: 'scatter',
+      x: entries.x,
+      y: entries.y,
+      mode: 'markers',
+      marker: {color: color, size: 7, symbol: 'triangle-up'},
+      text: entries.text,
+      hoverinfo: 'text',
+      name: color === '#3fb950' ? 'Win Entry' : 'Loss Entry',
+      showlegend: true,
+    });
+
+    lines.forEach(l => traces.push(l));
+  }
+
+  if (filter === 'all' || filter === 'win') addTradeArrows(winTrades, '#3fb950');
+  if (filter === 'all' || filter === 'loss') addTradeArrows(lossTrades, '#f85149');
+
+  // SL/TP zones for a sample trade
+  if (winTrades.length > 0 && filter !== 'loss') {
+    const last = winTrades[winTrades.length - 1];
+    traces.push({
+      type: 'scatter',
+      x: [last.entry_ts, last.entry_ts],
+      y: [last.sl, last.tp],
+      mode: 'lines',
+      line: {color: '#58a6ff40', width: 1, dash: 'dot'},
+      showlegend: false,
+      hoverinfo: 'skip',
+    });
+  }
+
+  const layout = {
+    template: 'plotly_dark',
+    paper_bgcolor: '#161b22',
+    plot_bgcolor: '#0d1117',
+    margin: {l: 60, r: 20, t: 10, b: 40},
+    xaxis: {
+      title: '',
+      gridcolor: '#21262d',
+      showgrid: true,
+    },
+    yaxis: {
+      title: 'Price (USD)',
+      gridcolor: '#21262d',
+      showgrid: true,
+    },
+    hovermode: 'closest',
+    dragmode: 'pan',
+    showlegend: true,
+    legend: {orientation: 'h', y: 1.12, x: 0},
+  };
+
+  Plotly.newPlot('chart-price', traces, layout, {responsive: true, displayModeBar: true, modeBarButtonsToRemove: ['lasso2d', 'select2d']});
+}
+
+// ── PnL Chart ──
+function buildPnlChart() {
+  const areaColor = pnlCurve.length > 0 && pnlCurve[pnlCurve.length - 1].y >= 0 ? '#3fb95040' : '#f8514940';
+  const lineColor = pnlCurve.length > 0 && pnlCurve[pnlCurve.length - 1].y >= 0 ? '#3fb950' : '#f85149';
+
+  const traces = [{
+    type: 'scatter',
+    x: pnlCurve.map(d => d.x),
+    y: pnlCurve.map(d => d.y),
+    mode: 'lines+markers',
+    fill: 'tozeroy',
+    fillcolor: areaColor,
+    line: {color: lineColor, width: 2},
+    marker: {
+      size: 6,
+      color: pnlCurve.map(d => d.y >= 0 ? '#3fb950' : '#f85149'),
+    },
+    text: pnlCurve.map(d => `Trade #${d.trade_num}: $${d.y.toFixed(2)}`),
+    hoverinfo: 'text',
+    showlegend: false,
+  }];
+
+  const layout = {
+    template: 'plotly_dark',
+    paper_bgcolor: '#161b22',
+    plot_bgcolor: '#0d1117',
+    margin: {l: 60, r: 20, t: 5, b: 30},
+    xaxis: {gridcolor: '#21262d', showgrid: true},
+    yaxis: {title: 'Cumulative P&L ($)', gridcolor: '#21262d', showgrid: true},
+    hovermode: 'closest',
+    shapes: [{
+      type: 'line',
+      x0: pnlCurve.length > 0 ? pnlCurve[0].x : 0,
+      x1: pnlCurve.length > 0 ? pnlCurve[pnlCurve.length - 1].x : 0,
+      y0: 0,
+      y1: 0,
+      line: {color: '#8b949e', width: 1, dash: 'dash'},
+    }],
+  };
+
+  Plotly.newPlot('chart-pnl', traces, layout, {responsive: true, displayModeBar: false});
+}
+
+// ── Filter ──
+function filterTrades(type) {
+  document.querySelectorAll('.filter-bar button').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + type).classList.add('active');
+
+  document.querySelectorAll('.trade-row').forEach(row => {
+    const result = row.dataset.result;
+    const dir = row.dataset.dir;
+    if (type === 'all') row.style.display = 'flex';
+    else if (type === 'win') row.style.display = result === 'win' ? 'flex' : 'none';
+    else if (type === 'loss') row.style.display = result === 'loss' ? 'flex' : 'none';
+    else if (type === 'long') row.style.display = dir === 'long' ? 'flex' : 'none';
+    else if (type === 'short') row.style.display = dir === 'short' ? 'flex' : 'none';
+  });
+}
+
+// ── Init ──
+buildPriceChart('all');
+buildPnlChart();
+</script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+data:
+  file_path: xauusd_1m.csv
+  warmup_days: 15
+  trade_start: "2025-01-15"
+  trade_end: "2025-12-31"
+
+execution:
+  commission: 0.00005
+  initial_cash: 50000.0
+  slippage_fixed: 0.05
+  spread_buffer: 0.1
+
+logging:
+  directory: logs
+  level: INFO
+
+risk:
+  atr_multiplier: 1.5
+  risk_pct: 0.02
+  rr_ratio: 2.0
+
+sessions:
+  asia_end: 7
+  asia_start: 0
+  entry_restrict_killzones: true
+  london_end: 12
+  london_open_end: 16
+  london_open_start: 7
+  london_start: 7
+  ny_am_end: 21
+  ny_am_start: 12
+  ny_end: 21
+  ny_start: 12
+
+strategy:
+  atr_multiplier: 1.5
+  atr_period: 14
+  enable_killzone_filter: true
+  enable_volume_filter: true
+  max_daily_trades: 8
+  min_bars_between_trades: 5
+  risk_pct: 0.02
+  rr_ratio: 2.0
+  structure_lookback: 3
+  sweep_expiry_bars: 12

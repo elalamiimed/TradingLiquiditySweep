@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+*.so
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/*.log
+
+# Data files (large CSVs — uncomment if needed)
+# *.csv
+# Price1m/
+
+# Test artifacts
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Trae / Continue AI
+.continue/
+.trae/
+
+# Output images from simulations (optional — keep if you want to track charts)
+# monte_carlo_results.png
+# monte_carlo_full_results.png
